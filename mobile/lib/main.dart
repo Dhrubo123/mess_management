@@ -18,10 +18,10 @@ class MessMateApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
       valueListenable: AppLocale.current,
-      builder: (_, _, _) => MaterialApp(
+      builder: (_, locale, _) => MaterialApp(
         title: 'Ctg Mess',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
+        theme: AppTheme.light(isBn: locale == 'bn'),
         home: const _AuthGate(),
       ),
     );
@@ -58,11 +58,22 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_checking) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: AppColors.primaryDark,
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
     }
-    if (!_isLoggedIn) {
-      return AuthScreen(onAuthenticated: () => setState(() => _isLoggedIn = true));
-    }
-    return HomeShell(onLogout: () => setState(() => _isLoggedIn = false));
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      child: !_isLoggedIn
+          ? AuthScreen(
+              key: const ValueKey('auth'),
+              onAuthenticated: () => setState(() => _isLoggedIn = true),
+            )
+          : HomeShell(
+              key: const ValueKey('home'),
+              onLogout: () => setState(() => _isLoggedIn = false),
+            ),
+    );
   }
 }

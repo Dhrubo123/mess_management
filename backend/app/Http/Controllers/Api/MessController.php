@@ -7,9 +7,12 @@ use App\Http\Controllers\Controller;
 use App\Models\FixedBill;
 use App\Models\Mess;
 use App\Models\MessMember;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class MessController extends Controller
 {
@@ -126,6 +129,50 @@ class MessController extends Controller
             'mess' => $mess->loadCount('activeMembers'),
             'membership' => $membership,
         ]);
+    }
+
+    public function addMember(Request $request, Mess $mess): JsonResponse
+    {
+        $this->requireManager($request, $mess);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'room_label' => ['nullable', 'string', 'max:60'],
+            'monthly_seat_rent' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $phone = isset($validated['phone']) ? trim($validated['phone']) : null;
+        $phone = $phone !== '' ? $phone : null;
+
+        $memberUser = $phone ? User::where('phone', $phone)->first() : null;
+
+        if (! $memberUser) {
+            $slug = Str::lower(Str::random(10));
+            $memberUser = User::create([
+                'name' => trim($validated['name']),
+                'phone' => $phone,
+                'email' => ($phone ?: $slug) . '@offline.ctgmess.bd',
+                'password' => Hash::make(Str::random(16)),
+                'locale' => $request->user()->locale ?? 'en',
+            ]);
+        }
+
+        $membership = MessMember::updateOrCreate(
+            ['mess_id' => $mess->id, 'user_id' => $memberUser->id],
+            [
+                'role' => 'member',
+                'is_active' => true,
+                'left_at' => null,
+                'room_label' => $validated['room_label'] ?? null,
+                'monthly_seat_rent' => $validated['monthly_seat_rent'] ?? 0,
+            ]
+        );
+
+        return response()->json([
+            'message' => "{$memberUser->name} added to the mess.",
+            'member' => $membership->load('user:id,name,phone,email'),
+        ], 201);
     }
 
     public function show(Request $request, Mess $mess): JsonResponse

@@ -137,17 +137,27 @@ class MessSummaryService
                 "🍛 মোট মিল: {$t['total_meals']}",
                 "🛒 মোট বাজার: ৳{$t['total_bazar']}",
                 "📊 মিল রেট: ৳{$t['meal_rate']}",
-                "💡 ফিক্সড বিল (প্রতি জন): ৳{$t['per_member_fixed_share']}",
+                "💰 মোট মিল জমা: ৳{$t['total_meal_deposits']}",
                 "💵 হাতে আছে (মিল ফান্ড): ৳{$t['cash_in_hand']}",
-                "━━━━━━━━━━━━━━━━",
-                "সদস্যদের হিসাব:",
+                "💡 ফিক্সড বিল (প্রতি জন): ৳{$t['per_member_fixed_share']}",
             ];
 
+            if (! empty($summary['fixed_bills'])) {
+                $billList = array_map(fn ($b) => "{$b['title']} ৳{$b['total_amount']}", $summary['fixed_bills']);
+                $lines[] = "📋 বিলসমূহ: " . implode(', ', $billList);
+            }
+
+            $lines[] = "━━━━━━━━━━━━━━━━";
+            $lines[] = "সদস্যদের মিল ও টাকার হিসাব:";
+
             foreach ($summary['members'] as $m) {
-                $status = $m['net_balance'] >= 0
-                    ? "পাবে ৳" . number_format($m['net_balance'], 0)
-                    : "বাকি ৳" . number_format(abs($m['net_balance']), 0);
-                $lines[] = "• {$m['name']}: {$m['total_meals']} মিল | খরচ ৳{$m['total_cost']} | জমা ৳{$m['total_paid']} ({$status})";
+                $mealSt = $m['meal_balance'] >= 0
+                    ? "মিল পাবে ৳" . number_format($m['meal_balance'], 0)
+                    : "মিল বাকি ৳" . number_format(abs($m['meal_balance']), 0);
+                $netSt = $m['net_balance'] >= 0
+                    ? "মোট পাবে ৳" . number_format($m['net_balance'], 0)
+                    : "মোট বাকি ৳" . number_format(abs($m['net_balance']), 0);
+                $lines[] = "• {$m['name']}: {$m['total_meals']} মিল | মিল জমা ৳{$m['meal_deposit']} ({$mealSt}) | {$netSt}";
             }
 
             $lines[] = "━━━━━━━━━━━━━━━━";
@@ -162,17 +172,27 @@ class MessSummaryService
             "🍛 Total Meals: {$t['total_meals']}",
             "🛒 Total Bazar: ৳{$t['total_bazar']}",
             "📊 Meal Rate: ৳{$t['meal_rate']}",
-            "💡 Fixed Bills / Member: ৳{$t['per_member_fixed_share']}",
+            "💰 Meal Fund Collected: ৳{$t['total_meal_deposits']}",
             "💵 Meal Cash in Hand: ৳{$t['cash_in_hand']}",
-            "━━━━━━━━━━━━━━━━",
-            "Member Breakdown:",
+            "💡 Fixed Bills / Member: ৳{$t['per_member_fixed_share']}",
         ];
 
+        if (! empty($summary['fixed_bills'])) {
+            $billList = array_map(fn ($b) => "{$b['title']} ৳{$b['total_amount']}", $summary['fixed_bills']);
+            $lines[] = "📋 Bills: " . implode(', ', $billList);
+        }
+
+        $lines[] = "━━━━━━━━━━━━━━━━";
+        $lines[] = "Member Meal & Money Breakdown:";
+
         foreach ($summary['members'] as $m) {
-            $status = $m['net_balance'] >= 0
-                ? "Refund ৳" . number_format($m['net_balance'], 0)
-                : "Due ৳" . number_format(abs($m['net_balance']), 0);
-            $lines[] = "• {$m['name']}: {$m['total_meals']} meals | Cost ৳{$m['total_cost']} | Paid ৳{$m['total_paid']} ({$status})";
+            $mealSt = $m['meal_balance'] >= 0
+                ? "Meal +৳" . number_format($m['meal_balance'], 0)
+                : "Meal -৳" . number_format(abs($m['meal_balance']), 0);
+            $netSt = $m['net_balance'] >= 0
+                ? "Net Refund ৳" . number_format($m['net_balance'], 0)
+                : "Net Due ৳" . number_format(abs($m['net_balance']), 0);
+            $lines[] = "• {$m['name']}: {$m['total_meals']} meals | Given ৳{$m['meal_deposit']} ({$mealSt}) | {$netSt}";
         }
 
         $lines[] = "━━━━━━━━━━━━━━━━";

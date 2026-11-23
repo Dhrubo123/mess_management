@@ -4,8 +4,10 @@ import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../l10n/app_strings.dart';
 import '../services/api_service.dart';
+import '../services/report_pdf_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_sheets.dart';
+import '../widgets/shimmer_loading.dart';
 
 class HomeShell extends StatefulWidget {
   final VoidCallback onLogout;
@@ -70,6 +72,7 @@ class _HomeShellState extends State<HomeShell> {
       };
 
   Future<void> _changeMonth(int delta) async {
+    HapticFeedback.selectionClick();
     final dt = DateTime(_selectedYear, _selectedMonth + delta, 1);
     setState(() {
       _selectedYear = dt.year;
@@ -205,6 +208,80 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {}
   }
 
+  Future<void> _openShareReportSheet() async {
+    if (_activeMessId == null || _summary == null) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              AppLocale.isBn ? 'মাসিক রিপোর্ট শেয়ার করুন' : 'Share Monthly Report',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              AppLocale.isBn ? 'হোয়াটসঅ্যাপ বা মেসেঞ্জার গ্রুপে পাঠান' : 'Send directly to your mess WhatsApp or Messenger group',
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppColors.border)),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primary),
+              ),
+              title: Text(AppLocale.isBn ? 'PDF স্টেটমেন্ট (WhatsApp)' : 'Share PDF Statement', style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(AppLocale.isBn ? 'টেবিলসহ পূর্ণাঙ্গ মাসিক হিসাব PDF' : 'Clean A4 table with meals, money given & fixed bills'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  await ReportPdfService.generateAndShare(_summary!);
+                } catch (e) {
+                  _showSnack(e.toString(), isError: true);
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppColors.border)),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.amberBg, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.chat_rounded, color: AppColors.amber),
+              ),
+              title: Text(AppLocale.isBn ? 'টেক্সট মেসেজ শেয়ার' : 'Share Formatted Text', style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(AppLocale.isBn ? 'দ্রুত চ্যাটে পাঠানোর জন্য সংক্ষিপ্ত হিসাব' : 'Quick summary message for WhatsApp / Messenger'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _copySummary(AppLocale.current.value);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _copySummary(String locale) async {
     if (_activeMessId == null) return;
     try {
@@ -327,7 +404,7 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const DashboardShimmer()
           : IndexedStack(
               index: _tabIndex,
               children: [
@@ -338,31 +415,42 @@ class _HomeShellState extends State<HomeShell> {
               ],
             ),
       floatingActionButton: _buildFab(),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.space_dashboard_outlined),
-            selectedIcon: const Icon(Icons.space_dashboard_rounded, color: AppColors.primary),
-            label: S.t('tab_home'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined),
-            selectedIcon: const Icon(Icons.receipt_long_rounded, color: AppColors.primary),
-            label: S.t('tab_ledger'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.bed_outlined),
-            selectedIcon: const Icon(Icons.bed_rounded, color: AppColors.primary),
-            label: S.t('tab_tolet'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded),
-            selectedIcon: const Icon(Icons.person_rounded, color: AppColors.primary),
-            label: S.t('tab_profile'),
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: AppShadows.nav,
+        ),
+        child: NavigationBar(
+          selectedIndex: _tabIndex,
+          onDestinationSelected: (i) {
+            if (i != _tabIndex) {
+              HapticFeedback.selectionClick();
+              setState(() => _tabIndex = i);
+            }
+          },
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.space_dashboard_outlined),
+              selectedIcon: const Icon(Icons.space_dashboard_rounded, color: AppColors.primary),
+              label: S.t('tab_home'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long_rounded, color: AppColors.primary),
+              label: S.t('tab_ledger'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.bed_outlined),
+              selectedIcon: const Icon(Icons.bed_rounded, color: AppColors.primary),
+              label: S.t('tab_tolet'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded),
+              selectedIcon: const Icon(Icons.person_rounded, color: AppColors.primary),
+              label: S.t('tab_profile'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -509,16 +597,10 @@ class _HomeShellState extends State<HomeShell> {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [AppColors.primary, AppColors.primaryDark],
+                colors: [Color(0xFF0C6B54), AppColors.primary, AppColors.primaryDark],
               ),
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.25),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: AppShadows.hero,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,22 +668,27 @@ class _HomeShellState extends State<HomeShell> {
                 const SizedBox(height: 16),
                 Text(S.t('current_meal_rate'), style: const TextStyle(color: Color(0xFFB7E4D8), fontSize: 13)),
                 const SizedBox(height: 2),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '৳${totals['meal_rate']}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.8,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  child: Row(
+                    key: ValueKey('rate-$_selectedYear-$_selectedMonth-${totals['meal_rate']}'),
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        '৳${totals['meal_rate']}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.8,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(S.t('per_meal'), style: const TextStyle(color: Color(0xFFB7E4D8), fontSize: 14)),
-                  ],
+                      const SizedBox(width: 6),
+                      Text(S.t('per_meal'), style: const TextStyle(color: Color(0xFFB7E4D8), fontSize: 14)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -751,7 +838,7 @@ class _HomeShellState extends State<HomeShell> {
                 })
               else
                 _quickAction(Icons.receipt_long_rounded, S.t('tab_ledger'), () => setState(() => _tabIndex = 1)),
-              _quickAction(Icons.share_rounded, S.t('share_summary'), () => _copySummary(AppLocale.current.value)),
+              _quickAction(Icons.share_rounded, S.t('share_summary'), _openShareReportSheet),
             ],
           ),
 
@@ -783,6 +870,7 @@ class _HomeShellState extends State<HomeShell> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: AppColors.border),
+                boxShadow: AppShadows.card,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -906,10 +994,30 @@ class _HomeShellState extends State<HomeShell> {
           ),
           if (_isManager && !_isMonthClosed)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                AppLocale.isBn ? 'টিপস: যেকোনো সদস্যের উপর ট্যাপ করে মিলের টাকা জমা নিন' : 'Tip: Tap any member card to record their meal deposit',
-                style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      AppLocale.isBn ? 'টিপস: সদস্যের উপর ট্যাপ করে জমা নিন' : 'Tap any member to record deposit',
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () async {
+                      if (await AppSheets.showAddMember(context, _activeMessId!)) {
+                        await _loadMessData(_activeMessId!);
+                        _showSnack('Roommate added to mess!');
+                      }
+                    },
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                    label: Text(AppLocale.isBn ? '+ সদস্য যোগ' : '+ Add Member', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
             ),
           const SizedBox(height: 10),
@@ -947,6 +1055,7 @@ class _HomeShellState extends State<HomeShell> {
                   border: Border.all(
                     color: noDeposit ? AppColors.danger.withValues(alpha: 0.35) : AppColors.border,
                   ),
+                  boxShadow: AppShadows.card,
                 ),
                 child: Column(
                   children: [
@@ -1046,7 +1155,10 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _balanceModeChip(String label, bool active, VoidCallback onTap) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1089,19 +1201,23 @@ class _HomeShellState extends State<HomeShell> {
   Widget _quickAction(IconData icon, String label, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.border),
+                  boxShadow: AppShadows.card,
                 ),
                 child: Icon(icon, color: AppColors.primary, size: 22),
               ),
@@ -1165,9 +1281,20 @@ class _HomeShellState extends State<HomeShell> {
 
   void _openPhotoViewer(String rawPath, String title) {
     final url = ApiConfig.resolveMediaUrl(rawPath);
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => Dialog(
+      barrierDismissible: true,
+      barrierLabel: 'Photo',
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 220),
+      transitionBuilder: (_, anim, _, child) => FadeTransition(
+        opacity: anim,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1.0).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          child: child,
+        ),
+      ),
+      pageBuilder: (ctx, _, _) => Dialog(
         backgroundColor: Colors.black,
         insetPadding: const EdgeInsets.all(12),
         child: Stack(

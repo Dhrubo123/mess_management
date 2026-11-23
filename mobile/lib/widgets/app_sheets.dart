@@ -1093,4 +1093,87 @@ class AppSheets {
     );
     return result == true;
   }
+
+  static Future<bool> showAddMember(BuildContext context, int messId) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final roomCtrl = TextEditingController();
+    final rentCtrl = TextEditingController(text: '3000');
+    bool saving = false;
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => _sheetShell(
+          ctx,
+          title: 'Add Roommate to Mess',
+          subtitle: 'Add roommates right away — even if they haven\'t installed Ctg Mess yet.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Roommate Name (e.g. Fahim)', prefixIcon: Icon(Icons.person_outline)),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone Number (Optional)', prefixIcon: Icon(Icons.phone_outlined)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: roomCtrl,
+                      decoration: const InputDecoration(labelText: 'Room / Seat (Optional)'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: rentCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Seat Rent (৳)', prefixText: '৳ '),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (nameCtrl.text.trim().isEmpty) return;
+                        setS(() => saving = true);
+                        try {
+                          await ApiService.post('/messes/$messId/members', {
+                            'name': nameCtrl.text.trim(),
+                            'phone': phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+                            'room_label': roomCtrl.text.trim().isEmpty ? null : roomCtrl.text.trim(),
+                            'monthly_seat_rent': double.tryParse(rentCtrl.text.trim()) ?? 0,
+                          });
+                          if (ctx.mounted) Navigator.pop(ctx, true);
+                        } catch (e) {
+                          setS(() => saving = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text(e.toString()), backgroundColor: AppColors.danger),
+                            );
+                          }
+                        }
+                      },
+                child: Text(saving ? 'Adding...' : 'Add Roommate'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result == true;
+  }
 }

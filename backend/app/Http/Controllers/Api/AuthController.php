@@ -15,19 +15,38 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'max:20', 'unique:users,phone'],
-            'email' => ['nullable', 'email', 'max:150', 'unique:users,email'],
+            'phone' => ['required', 'string', 'max:20'],
+            'email' => ['nullable', 'email', 'max:150'],
             'password' => ['required', 'string', 'min:6'],
             'locale' => ['nullable', 'in:en,bn'],
         ]);
 
-        $user = User::create([
-            'name' => $validated['name'],
-            'phone' => $validated['phone'],
-            'email' => $validated['email'] ?? ($validated['phone'] . '@messmate.bd'),
-            'password' => $validated['password'],
-            'locale' => $validated['locale'] ?? 'en',
-        ]);
+        $existing = User::where('phone', $validated['phone'])->first();
+
+        // Allow claiming an offline shadow member added by a mess manager
+        if ($existing && str_ends_with((string) $existing->email, '@offline.ctgmess.bd')) {
+            $existing->update([
+                'name' => $validated['name'],
+                'email' => $validated['email'] ?? ($validated['phone'] . '@ctgmess.bd'),
+                'password' => $validated['password'],
+                'locale' => $validated['locale'] ?? $existing->locale,
+            ]);
+            $user = $existing->fresh();
+        } else {
+            if ($existing) {
+                throw ValidationException::withMessages([
+                    'phone' => ['This phone number is already registered.'],
+                ]);
+            }
+
+            $user = User::create([
+                'name' => $validated['name'],
+                'phone' => $validated['phone'],
+                'email' => $validated['email'] ?? ($validated['phone'] . '@ctgmess.bd'),
+                'password' => $validated['password'],
+                'locale' => $validated['locale'] ?? 'en',
+            ]);
+        }
 
         $token = $user->createToken('mobile-app')->plainTextToken;
 

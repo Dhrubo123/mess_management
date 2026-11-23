@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/messes', [MessController::class, 'store']);
     Route::post('/messes/join', [MessController::class, 'join']);
     Route::get('/messes/{mess}', [MessController::class, 'show']);
+    Route::post('/messes/{mess}/members', [MessController::class, 'addMember']);
     Route::patch('/messes/{mess}/settings', [MessController::class, 'updateSettings']);
     Route::post('/messes/{mess}/handover', [MessController::class, 'handoverManager']);
 
