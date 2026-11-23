@@ -56,10 +56,58 @@ class FixedBillController extends Controller
         return response()->json(['fixed_bill' => $bill], 201);
     }
 
+    public function copyPrevious(Request $request, Mess $mess): JsonResponse
+    {
+        $this->requireManager($request, $mess);
+        $currentMonth = $this->resolveMessMonth($request, $mess);
+        $this->ensureMonthOpen($currentMonth);
+
+        $prevDate = \Carbon\Carbon::create($currentMonth->year, $currentMonth->month, 1)->subMonth();
+        $prevMonth = $mess->months()
+            ->where('year', (int) $prevDate->year)
+            ->where('month', (int) $prevDate->month)
+            ->first();
+
+        if (! $prevMonth) {
+            return response()->json(['message' => 'No bills found in previous month.'], 404);
+        }
+
+        $prevBills = $prevMonth->fixedBills()->get();
+        if ($prevBills->isEmpty()) {
+            return response()->json(['message' => 'No bills found in previous month.'], 404);
+        }
+
+        $copied = 0;
+        foreach ($prevBills as $b) {
+            $exists = $currentMonth->fixedBills()
+                ->where('title', $b->title)
+                ->where('category', $b->category)
+                ->exists();
+            if (! $exists) {
+                FixedBill::create([
+                    'mess_month_id' => $currentMonth->id,
+                    'title' => $b->title,
+                    'category' => $b->category,
+                    'total_amount' => $b->total_amount,
+                    'split_type' => $b->split_type,
+                    'notes' => $b->notes,
+                    'created_by' => $request->user()->id,
+                ]);
+                $copied++;
+            }
+        }
+
+        return response()->json([
+            'message' => $copied > 0 ? "Copied {$copied} bills from last month." : 'All bills from last month already exist.',
+            'copied_count' => $copied,
+        ]);
+    }
+
     public function destroy(Request $request, Mess $mess, FixedBill $fixedBill): JsonResponse
     {
         $this->requireManager($request, $mess);
         abort_if($fixedBill->messMonth->mess_id !== $mess->id, 404);
+        $this->ensureMonthOpen($fixedBill->messMonth);
 
         $fixedBill->delete();
 

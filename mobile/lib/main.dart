@@ -19,7 +19,7 @@ class MessMateApp extends StatelessWidget {
     return ValueListenableBuilder<String>(
       valueListenable: AppLocale.current,
       builder: (_, _, _) => MaterialApp(
-        title: 'MessMate BD',
+        title: 'Ctg Mess',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         home: const _AuthGate(),

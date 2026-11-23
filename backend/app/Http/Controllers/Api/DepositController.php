@@ -74,6 +74,7 @@ class DepositController extends Controller
     {
         $this->requireManager($request, $mess);
         abort_if($deposit->messMonth->mess_id !== $mess->id, 404);
+        $this->ensureMonthOpen($deposit->messMonth);
 
         $deposit->delete();
 

@@ -39,7 +39,7 @@ class S {
     'full_name': 'Full Name',
     'mobile_number': 'Mobile Number',
     'password': 'Password',
-    'sign_in_btn': 'Sign In to MessMate',
+    'sign_in_btn': 'Sign In to Ctg Mess',
     'register_btn': 'Create Free Account',
     'demo_login': 'Quick Demo Login (Tanvir • Chawk Bazar, CTG)',
 

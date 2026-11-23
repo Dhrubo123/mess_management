@@ -77,6 +77,7 @@ class BazarController extends Controller
     {
         $this->requireManager($request, $mess);
         abort_if($bazar->messMonth->mess_id !== $mess->id, 404);
+        $this->ensureMonthOpen($bazar->messMonth);
 
         $bazar->delete();
 

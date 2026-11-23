@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../config/api_config.dart';
 import '../l10n/app_strings.dart';
 import '../services/api_service.dart';
@@ -211,8 +212,53 @@ class _HomeShellState extends State<HomeShell> {
         ..._monthQuery,
         'locale': locale,
       });
-      await Clipboard.setData(ClipboardData(text: res['share_text'] as String));
-      _showSnack(locale == 'bn' ? 'বাংলা হিসাব কপি হয়েছে (WhatsApp/Messenger-এ পেস্ট করুন)' : 'Monthly summary copied!');
+      final text = res['share_text'] as String;
+      await Clipboard.setData(ClipboardData(text: text));
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (e) {
+      _showSnack(e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _confirmAndDelete({
+    required String title,
+    required String apiPath,
+    required String successMsg,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete $title?'),
+        content: const Text('This entry will be removed and monthly totals will recalculate immediately.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ApiService.delete(apiPath);
+      if (_activeMessId != null) await _loadMessData(_activeMessId!);
+      _showSnack(successMsg);
+    } catch (e) {
+      _showSnack(e.toString(), isError: true);
+    }
+  }
+
+  Future<void> _copyPreviousBills() async {
+    if (_activeMessId == null) return;
+    try {
+      final res = await ApiService.post('/messes/$_activeMessId/fixed-bills/copy-previous', {
+        'year': _selectedYear,
+        'month': _selectedMonth,
+      });
+      await _loadMessData(_activeMessId!);
+      _showSnack(res['message']?.toString() ?? 'Copied last month\'s bills!');
     } catch (e) {
       _showSnack(e.toString(), isError: true);
     }
@@ -704,8 +750,8 @@ class _HomeShellState extends State<HomeShell> {
                   }
                 })
               else
-                _quickAction(Icons.share_rounded, S.t('share_summary'), () => _copySummary('en')),
-              _quickAction(Icons.chat_bubble_outline_rounded, AppLocale.isBn ? 'হিসাব শেয়ার' : 'বাংলা শেয়ার', () => _copySummary('bn')),
+                _quickAction(Icons.receipt_long_rounded, S.t('tab_ledger'), () => setState(() => _tabIndex = 1)),
+              _quickAction(Icons.share_rounded, S.t('share_summary'), () => _copySummary(AppLocale.current.value)),
             ],
           ),
 
@@ -1241,6 +1287,17 @@ class _HomeShellState extends State<HomeShell> {
               ),
               const SizedBox(width: 8),
               Text('৳${b['amount']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.ink)),
+              if (_isManager && !_isMonthClosed)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Delete Bazar',
+                  onPressed: () => _confirmAndDelete(
+                    title: 'Bazar Entry',
+                    apiPath: '/messes/$_activeMessId/bazars/${b['id']}',
+                    successMsg: 'Bazar entry deleted.',
+                  ),
+                ),
             ],
           ),
         );
@@ -1294,6 +1351,17 @@ class _HomeShellState extends State<HomeShell> {
                 ),
               ),
               Text('+৳${d['amount']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: AppColors.primary)),
+              if (_isManager && !_isMonthClosed)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Delete Deposit',
+                  onPressed: () => _confirmAndDelete(
+                    title: 'Deposit',
+                    apiPath: '/messes/$_activeMessId/deposits/${d['id']}',
+                    successMsg: 'Deposit deleted.',
+                  ),
+                ),
             ],
           ),
         );
@@ -1302,47 +1370,76 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget _buildFixedBillList() {
-    if (_fixedBills.isEmpty) return _emptyState(Icons.receipt_outlined, 'No fixed bills added yet');
-    return ListView.builder(
+    return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
-      itemCount: _fixedBills.length,
-      itemBuilder: (_, i) {
-        final b = _fixedBills[i];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+      children: [
+        if (_isManager && !_isMonthClosed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: OutlinedButton.icon(
+              onPressed: _copyPreviousBills,
+              icon: const Icon(Icons.copy_all_rounded, size: 18),
+              label: Text(AppLocale.isBn ? 'গত মাসের ফিক্সড বিল কপি করুন' : 'Copy Last Month\'s Bills'),
+            ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.bolt_rounded, color: AppColors.primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        if (_fixedBills.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 64),
+            child: Column(
+              children: [
+                Icon(Icons.receipt_outlined, size: 48, color: Colors.grey.shade400),
+                const SizedBox(height: 10),
+                Text(S.t('no_bills'), style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          )
+        else
+          ..._fixedBills.map((b) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
                   children: [
-                    Text(b['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text(
-                      'Category: ${(b['category'] ?? 'other').toString().toUpperCase()} • Equal split',
-                      style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.bolt_rounded, color: AppColors.primary, size: 20),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(b['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text(
+                            'Category: ${(b['category'] ?? 'other').toString().toUpperCase()} • ${S.t('equal_split')}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text('৳${b['total_amount']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                    if (_isManager && !_isMonthClosed)
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Delete Bill',
+                        onPressed: () => _confirmAndDelete(
+                          title: 'Fixed Bill',
+                          apiPath: '/messes/$_activeMessId/fixed-bills/${b['id']}',
+                          successMsg: 'Fixed bill deleted.',
+                        ),
+                      ),
                   ],
                 ),
-              ),
-              Text('৳${b['total_amount']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
-            ],
-          ),
-        );
-      },
+              )),
+      ],
     );
   }
 

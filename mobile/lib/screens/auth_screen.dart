@@ -105,7 +105,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'MessMate BD',
+                              'Ctg Mess',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 22,

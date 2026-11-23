@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Fixed bills
     Route::get('/messes/{mess}/fixed-bills', [FixedBillController::class, 'index']);
     Route::post('/messes/{mess}/fixed-bills', [FixedBillController::class, 'store']);
+    Route::post('/messes/{mess}/fixed-bills/copy-previous', [FixedBillController::class, 'copyPrevious']);
     Route::delete('/messes/{mess}/fixed-bills/{fixedBill}', [FixedBillController::class, 'destroy']);
 
     // Bachelor Seat / To-Let management
