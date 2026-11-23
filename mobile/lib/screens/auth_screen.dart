@@ -89,15 +89,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image.asset(
+                          'assets/icon/app_icon.png',
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
                         ),
-                        child: const Icon(Icons.home_work_rounded, color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
