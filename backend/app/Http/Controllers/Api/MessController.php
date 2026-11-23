@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\InteractsWithMess;
 use App\Http\Controllers\Controller;
+use App\Models\FixedBill;
 use App\Models\Mess;
 use App\Models\MessMember;
 use Illuminate\Http\JsonResponse;
@@ -34,7 +35,13 @@ class MessController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'meal_cutoff_time' => ['nullable', 'regex:/^\d{2}:\d{2}$/'],
             'has_breakfast' => ['nullable', 'boolean'],
+            'facilities' => ['nullable', 'array'],
+            'facilities.*' => ['string', 'max:40'],
+            'food_mode' => ['nullable', 'in:meal_rate,fixed_food'],
             'monthly_seat_rent' => ['nullable', 'numeric', 'min:0'],
+            'wifi_bill' => ['nullable', 'numeric', 'min:0'],
+            'bua_bill' => ['nullable', 'numeric', 'min:0'],
+            'electricity_bill' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $user = $request->user();
@@ -48,6 +55,8 @@ class MessController extends Controller
                 'address' => $validated['address'] ?? null,
                 'meal_cutoff_time' => $validated['meal_cutoff_time'] ?? '22:00',
                 'has_breakfast' => $validated['has_breakfast'] ?? false,
+                'facilities' => $validated['facilities'] ?? ['Wi-Fi', 'Bua', 'Electricity', 'Gas'],
+                'food_mode' => $validated['food_mode'] ?? 'meal_rate',
                 'created_by' => $user->id,
             ]);
 
@@ -59,7 +68,26 @@ class MessController extends Controller
                 'is_active' => true,
             ]);
 
-            $mess->currentMonth();
+            $month = $mess->currentMonth();
+
+            $initialBills = [
+                ['key' => 'wifi_bill', 'title' => 'Wi-Fi Bill', 'category' => 'wifi'],
+                ['key' => 'bua_bill', 'title' => 'Bua (Cook & Cleaning)', 'category' => 'bua'],
+                ['key' => 'electricity_bill', 'title' => 'Electricity & Gas', 'category' => 'electricity'],
+            ];
+            foreach ($initialBills as $b) {
+                $amt = (float) ($validated[$b['key']] ?? 0);
+                if ($amt > 0) {
+                    FixedBill::create([
+                        'mess_month_id' => $month->id,
+                        'title' => $b['title'],
+                        'category' => $b['category'],
+                        'total_amount' => $amt,
+                        'split_type' => 'equal',
+                        'created_by' => $user->id,
+                    ]);
+                }
+            }
 
             return $mess;
         });
@@ -125,6 +153,9 @@ class MessController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'meal_cutoff_time' => ['sometimes', 'regex:/^\d{2}:\d{2}$/'],
             'has_breakfast' => ['sometimes', 'boolean'],
+            'facilities' => ['sometimes', 'array'],
+            'facilities.*' => ['string', 'max:40'],
+            'food_mode' => ['sometimes', 'in:meal_rate,fixed_food'],
             'default_breakfast' => ['sometimes', 'numeric', 'min:0', 'max:5'],
             'default_lunch' => ['sometimes', 'numeric', 'min:0', 'max:5'],
             'default_dinner' => ['sometimes', 'numeric', 'min:0', 'max:5'],

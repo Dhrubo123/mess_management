@@ -51,8 +51,13 @@ class AppSheets {
     bool isCreate = true;
     final nameCtrl = TextEditingController();
     final areaCtrl = TextEditingController(text: 'Chawk Bazar');
-    final rentCtrl = TextEditingController(text: '3500');
+    final rentCtrl = TextEditingController(text: '3000');
+    final wifiCtrl = TextEditingController(text: '1000');
+    final buaCtrl = TextEditingController(text: '3000');
+    final elecCtrl = TextEditingController(text: '2500');
     final codeCtrl = TextEditingController();
+    final allFacilities = ['Wi-Fi', 'Electricity', 'Gas', 'Bua', 'Fridge', 'Filter Water', 'Lift', 'Generator', '24/7 Security', 'Attached Bath'];
+    final selectedFacilities = <String>{'Wi-Fi', 'Electricity', 'Gas', 'Bua', 'Filter Water'};
     bool saving = false;
 
     final result = await showModalBottomSheet<bool>(
@@ -88,6 +93,52 @@ class AppSheets {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Your Monthly Seat Rent (৳)', prefixText: '৳ '),
                 ),
+                const SizedBox(height: 12),
+                const Text('Monthly Shared Mess Bills (Optional)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: wifiCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Wi-Fi ৳', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: buaCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Bua ৳', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: elecCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Elec/Gas ৳', isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text('What You Get (Included Features)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: allFacilities.map((f) {
+                    final on = selectedFacilities.contains(f);
+                    return FilterChip(
+                      label: Text(f, style: const TextStyle(fontSize: 11.5)),
+                      selected: on,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (v) => setS(() => v ? selectedFacilities.add(f) : selectedFacilities.remove(f)),
+                    );
+                  }).toList(),
+                ),
               ] else ...[
                 TextField(
                   controller: codeCtrl,
@@ -107,6 +158,10 @@ class AppSheets {
                               'name': nameCtrl.text.trim(),
                               'area': areaCtrl.text.trim(),
                               'monthly_seat_rent': double.tryParse(rentCtrl.text.trim()) ?? 0,
+                              'wifi_bill': double.tryParse(wifiCtrl.text.trim()) ?? 0,
+                              'bua_bill': double.tryParse(buaCtrl.text.trim()) ?? 0,
+                              'electricity_bill': double.tryParse(elecCtrl.text.trim()) ?? 0,
+                              'facilities': selectedFacilities.toList(),
                             });
                           } else {
                             await ApiService.post('/messes/join', {
@@ -472,9 +527,14 @@ class AppSheets {
     return result == true;
   }
 
-  static Future<bool> showAddDeposit(BuildContext context, int messId, List<dynamic> members) async {
+  static Future<bool> showAddDeposit(
+    BuildContext context,
+    int messId,
+    List<dynamic> members, {
+    int? initialUserId,
+  }) async {
     if (members.isEmpty) return false;
-    int selectedUserId = members.first['user_id'] as int;
+    int selectedUserId = initialUserId ?? (members.first['user_id'] as int);
     String method = 'bkash';
     String type = 'meal';
     final amountCtrl = TextEditingController();
@@ -653,6 +713,7 @@ class AppSheets {
     int? messId,
     String defaultArea = 'Chawk Bazar',
     String defaultPhone = '',
+    List<String>? defaultFacilities,
   }) async {
     final titleCtrl = TextEditingController();
     final areaCtrl = TextEditingController(text: defaultArea);
@@ -661,8 +722,10 @@ class AppSheets {
     final phoneCtrl = TextEditingController(text: defaultPhone);
     final descCtrl = TextEditingController();
     String seatType = 'shared_seat';
-    final allFacilities = ['Wi-Fi', 'Bua', 'Fridge', 'Lift', 'Generator', 'Filter Water', 'Attached Bath'];
-    final selectedFacilities = <String>{'Wi-Fi', 'Bua', 'Filter Water'};
+    final allFacilities = ['Wi-Fi', 'Bua', 'Electricity', 'Gas', 'Fridge', 'Lift', 'Generator', 'Filter Water', '24/7 Security', 'Attached Bath'];
+    final selectedFacilities = (defaultFacilities != null && defaultFacilities.isNotEmpty)
+        ? defaultFacilities.toSet()
+        : <String>{'Wi-Fi', 'Bua', 'Filter Water'};
     final picker = ImagePicker();
     final List<XFile> pickedPhotos = [];
     bool saving = false;

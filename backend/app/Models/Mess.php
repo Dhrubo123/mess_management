@@ -18,6 +18,8 @@ class Mess extends Model
         'address',
         'meal_cutoff_time',
         'has_breakfast',
+        'facilities',
+        'food_mode',
         'default_breakfast',
         'default_lunch',
         'default_dinner',
@@ -30,6 +32,7 @@ class Mess extends Model
     {
         return [
             'has_breakfast' => 'boolean',
+            'facilities' => 'array',
             'default_breakfast' => 'float',
             'default_lunch' => 'float',
             'default_dinner' => 'float',

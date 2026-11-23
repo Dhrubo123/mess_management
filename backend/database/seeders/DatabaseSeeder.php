@@ -45,6 +45,8 @@ class DatabaseSeeder extends Seeder
                 'address' => 'Kapasgola Road, Chawk Bazar, Chattogram',
                 'meal_cutoff_time' => '22:00',
                 'has_breakfast' => false,
+                'facilities' => ['Wi-Fi', 'Bua', 'Electricity', 'Gas', 'Fridge', 'Filter Water', '24/7 Security'],
+                'food_mode' => 'meal_rate',
                 'is_pro' => true,
                 'created_by' => $manager->id,
             ]

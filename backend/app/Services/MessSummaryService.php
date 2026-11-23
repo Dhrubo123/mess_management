@@ -82,8 +82,17 @@ class MessSummaryService
                 'city' => $mess->city,
                 'meal_cutoff_time' => $mess->meal_cutoff_time,
                 'has_breakfast' => (bool) $mess->has_breakfast,
+                'facilities' => $mess->facilities ?? [],
+                'food_mode' => $mess->food_mode ?? 'meal_rate',
                 'is_pro' => $mess->is_pro,
             ],
+            'fixed_bills' => $fixedBills->map(fn ($b) => [
+                'id' => $b->id,
+                'title' => $b->title,
+                'category' => $b->category,
+                'total_amount' => round((float) $b->total_amount, 2),
+                'per_member' => round((float) $b->total_amount / $memberCount, 2),
+            ])->values()->all(),
             'today_kitchen' => [
                 'date' => $todayStr,
                 'breakfast' => round((float) $todayMeals->sum('breakfast'), 1),

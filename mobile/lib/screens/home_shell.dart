@@ -18,6 +18,7 @@ class _HomeShellState extends State<HomeShell> {
   int _tabIndex = 0;
   int _ledgerTab = 0; // 0: Bazar, 1: Deposits, 2: Fixed Bills, 3: Meals
   bool _loading = true;
+  bool _mealOnlyView = true; // true = Meal Taka Only, false = Meal + Rent + Fixed Bills
   int _selectedYear = DateTime.now().year;
   int _selectedMonth = DateTime.now().month;
 
@@ -276,12 +277,7 @@ class _HomeShellState extends State<HomeShell> {
               }
             },
           ),
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadInitial,
-          ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
         ],
       ),
       body: _loading
@@ -391,11 +387,15 @@ class _HomeShellState extends State<HomeShell> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
+          final messFacilities = ((_summary?['mess']?['facilities'] as List?) ?? [])
+              .map((e) => e.toString())
+              .toList();
           if (await AppSheets.showPostSeat(
             context,
             messId: _activeMessId,
             defaultArea: _summary?['mess']?['area'] ?? 'Chawk Bazar',
             defaultPhone: _user?['phone']?.toString() ?? '',
+            defaultFacilities: messFacilities,
           )) {
             await _searchListings();
             _showSnack('Seat listing published!');
@@ -451,8 +451,9 @@ class _HomeShellState extends State<HomeShell> {
     final monthLabel = _summary!['month']?['label'] ?? '';
 
     return RefreshIndicator(
-      onRefresh: () => _loadMessData(_activeMessId!),
+      onRefresh: _loadInitial,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
           // Fintech Hero Wallet Card
@@ -724,116 +725,297 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ],
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 18),
 
-          // Section Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(S.t('member_balances'), style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
-              Text(
-                '${S.t('cutoff')} ${_summary?['mess']?['meal_cutoff_time'] ?? '22:00'}',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          ...members.map((m) {
-            final net = (m['net_balance'] as num).toDouble();
-            final isPos = net >= 0;
-            final isMgr = m['role'] == 'manager';
+          // What's Included & Monthly Package Breakdown Card
+          Builder(builder: (_) {
+            final messFacilities = (_summary!['mess']?['facilities'] as List?) ?? [];
+            final bills = (_summary!['fixed_bills'] as List?) ?? [];
             return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: isMgr ? AppColors.primary : AppColors.primaryLight,
-                    foregroundColor: isMgr ? Colors.white : AppColors.primary,
-                    child: Text(
-                      (m['name'] as String).substring(0, 1).toUpperCase(),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.verified_outlined, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        AppLocale.isBn ? 'মাসিক প্যাকেজ ও সুবিধাসমূহ' : 'What\'s Included & Monthly Bills',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                m['name'] as String,
-                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (isMgr) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.amberBg,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
+                  const SizedBox(height: 10),
+                  // Food Row
+                  Row(
+                    children: [
+                      const Icon(Icons.restaurant_outlined, size: 16, color: AppColors.muted),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          AppLocale.isBn
+                              ? 'খাবার: মিল রেট সিস্টেম (${_hasBreakfast ? 'সকাল, দুপুর ও রাত' : 'দুপুর ও রাত'})'
+                              : 'Food: Meal-Rate System (${_hasBreakfast ? '3 Meals' : 'Lunch & Dinner'})',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Text(
+                        '৳${totals['meal_rate']}/meal',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                  if (bills.isNotEmpty) ...[
+                    const Divider(height: 18, color: AppColors.border),
+                    ...bills.map((b) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle_outline_rounded, size: 15, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Expanded(
                                 child: Text(
-                                  S.t('manager'),
-                                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.amber),
+                                  b['title']?.toString() ?? '',
+                                  style: const TextStyle(fontSize: 12.5, color: AppColors.ink),
                                 ),
+                              ),
+                              Text(
+                                '৳${b['per_member']}/person',
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink),
                               ),
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${m['total_meals']} ${S.t('meals')} • ${S.t('cost')} ৳${m['total_cost']} • ${S.t('paid')} ৳${m['total_paid']}',
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isPos ? AppColors.primaryLight : AppColors.dangerBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          isPos ? '+৳${net.toStringAsFixed(0)}' : '-৳${net.abs().toStringAsFixed(0)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13.5,
-                            color: isPos ? AppColors.primary : AppColors.danger,
                           ),
-                        ),
-                        Text(
-                          isPos ? S.t('refund') : S.t('due'),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: isPos ? AppColors.primary : AppColors.danger,
-                          ),
-                        ),
-                      ],
+                        )),
+                  ],
+                  if (messFacilities.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: messFacilities
+                          .map((f) => Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  f.toString(),
+                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                                ),
+                              ))
+                          .toList(),
                     ),
-                  ),
+                  ],
                 ],
               ),
             );
           }),
+
+          const SizedBox(height: 20),
+
+          // Section Header + Meal Only / All Toggle
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(S.t('member_balances'), style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800)),
+                    Text(
+                      _mealOnlyView
+                          ? (AppLocale.isBn
+                              ? 'মোট মিল জমা: ৳${totals['total_meal_deposits']}'
+                              : 'Meal Fund Collected: ৳${totals['total_meal_deposits']}')
+                          : (AppLocale.isBn
+                              ? 'মোট জমা (মিল + বিল): ৳${totals['total_deposits']}'
+                              : 'Total Collected: ৳${totals['total_deposits']}'),
+                      style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _balanceModeChip(AppLocale.isBn ? 'শুধু মিল' : 'Meal Only', _mealOnlyView, () => setState(() => _mealOnlyView = true)),
+                    _balanceModeChip(AppLocale.isBn ? 'সব বিল' : 'All Bills', !_mealOnlyView, () => setState(() => _mealOnlyView = false)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_isManager && !_isMonthClosed)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                AppLocale.isBn ? 'টিপস: যেকোনো সদস্যের উপর ট্যাপ করে মিলের টাকা জমা নিন' : 'Tip: Tap any member card to record their meal deposit',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              ),
+            ),
+          const SizedBox(height: 10),
+
+          ...members.map((m) {
+            final shownCost = (_mealOnlyView ? m['meal_cost'] : m['total_cost']) as num;
+            final shownPaid = (_mealOnlyView ? m['meal_deposit'] : m['total_paid']) as num;
+            final shownNet = ((_mealOnlyView ? m['meal_balance'] : m['net_balance']) as num).toDouble();
+            final isPos = shownNet >= 0;
+            final isMgr = m['role'] == 'manager';
+            final noDeposit = shownPaid <= 0;
+            final progress = shownCost > 0 ? (shownPaid / shownCost).clamp(0.0, 1.0).toDouble() : (shownPaid > 0 ? 1.0 : 0.0);
+
+            return InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: (_isManager && !_isMonthClosed)
+                  ? () async {
+                      if (await AppSheets.showAddDeposit(
+                        context,
+                        _activeMessId!,
+                        members,
+                        initialUserId: m['user_id'] as int,
+                      )) {
+                        await _loadMessData(_activeMessId!);
+                        _showSnack('Deposit recorded for ${m['name']}!');
+                      }
+                    }
+                  : null,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: noDeposit ? AppColors.danger.withValues(alpha: 0.35) : AppColors.border,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 21,
+                          backgroundColor: isMgr ? AppColors.primary : AppColors.primaryLight,
+                          foregroundColor: isMgr ? Colors.white : AppColors.primary,
+                          child: Text(
+                            (m['name'] as String).substring(0, 1).toUpperCase(),
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      m['name'] as String,
+                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isMgr) ...[
+                                    const SizedBox(width: 6),
+                                    _badge(S.t('manager'), AppColors.amberBg, AppColors.amber),
+                                  ],
+                                  if (noDeposit) ...[
+                                    const SizedBox(width: 6),
+                                    _badge(AppLocale.isBn ? 'জমা দেয়নি' : 'UNPAID', AppColors.dangerBg, AppColors.danger),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${m['total_meals']} ${S.t('meals')}  •  ${S.t('cost')} ৳$shownCost  •  ${S.t('paid')} ৳$shownPaid',
+                                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isPos ? AppColors.primaryLight : AppColors.dangerBg,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                isPos ? '+৳${shownNet.toStringAsFixed(0)}' : '-৳${shownNet.abs().toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  color: isPos ? AppColors.primary : AppColors.danger,
+                                ),
+                              ),
+                              Text(
+                                isPos ? S.t('refund') : S.t('due'),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: isPos ? AppColors.primary : AppColors.danger,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: AppColors.surface,
+                        color: isPos ? AppColors.accent : (noDeposit ? AppColors.danger : AppColors.amber),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
+      ),
+    );
+  }
+
+  Widget _balanceModeChip(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : AppColors.muted,
+          ),
+        ),
       ),
     );
   }
@@ -986,6 +1168,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildBazarList() {
     if (_bazars.isEmpty) return _emptyState(Icons.shopping_basket_outlined, 'No bazar entries yet');
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
       itemCount: _bazars.length,
       itemBuilder: (_, i) {
@@ -1068,6 +1251,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildDepositList() {
     if (_deposits.isEmpty) return _emptyState(Icons.account_balance_wallet_outlined, 'No deposits recorded yet');
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
       itemCount: _deposits.length,
       itemBuilder: (_, i) {
@@ -1120,6 +1304,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildFixedBillList() {
     if (_fixedBills.isEmpty) return _emptyState(Icons.receipt_outlined, 'No fixed bills added yet');
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
       itemCount: _fixedBills.length,
       itemBuilder: (_, i) {
@@ -1164,6 +1349,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildMealList() {
     if (_meals.isEmpty) return _emptyState(Icons.restaurant_menu_rounded, 'No meals logged yet');
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
       itemCount: _meals.length,
       itemBuilder: (_, i) {
@@ -1206,6 +1392,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _emptyState(IconData icon, String text) {
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         const SizedBox(height: 80),
         Icon(icon, size: 48, color: Colors.grey.shade400),
@@ -1333,6 +1520,7 @@ class _HomeShellState extends State<HomeShell> {
             child: _listings.isEmpty
                 ? _emptyState(Icons.bed_outlined, 'No bachelor seats found for this area')
                 : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 2, 16, 88),
                     itemCount: _listings.length,
                     itemBuilder: (_, i) {
@@ -1518,9 +1706,12 @@ class _HomeShellState extends State<HomeShell> {
     final inviteCode = _summary?['mess']?['invite_code'];
     final members = (_summary?['members'] as List?) ?? [];
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
+    return RefreshIndicator(
+      onRefresh: _loadInitial,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -1704,6 +1895,7 @@ class _HomeShellState extends State<HomeShell> {
           label: Text(S.t('sign_out')),
         ),
       ],
+      ),
     );
   }
 }
